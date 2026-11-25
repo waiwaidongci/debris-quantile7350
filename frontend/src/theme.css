@@ -1,0 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;600;700&family=Crimson+Text&display=swap');
+:root {
+  --text-font: 'Barlow Semi Condensed'; --title-font: 'Crimson Text';
+  --paper: oklch(.975 .012 249); --surface: oklch(.994 .006 249);
+  --ink: oklch(.235 .035 249); --quiet: oklch(.435 .038 249);
+  --stripe: oklch(.961 .014 249); --rule: oklch(.858 .024 249);
+  --accent: oklch(.445 0.103 249); --button-ink: oklch(.98 .007 249);
+  --focus: oklch(.64 0.103 249);
+  --side: oklch(.258 .041 249);
+  --side-ink: oklch(.975 .011 249);
+  --highlight: oklch(.36 .047 249);
+  --highlight-edge: oklch(.762 .096 249);
+  --side-width: 272px; --side-pad: 1.45rem;
+  --login-ratio: 1.86fr; --report-stripe: 5px;
+}
