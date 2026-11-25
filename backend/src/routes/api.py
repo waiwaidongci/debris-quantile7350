@@ -6,9 +6,11 @@ from src.config.settings import ARTIFACTS
 from src.constants.enums import Role
 from src.controllers.query import delivery_status, jobs, recent_activity, require_row, revisions
 from src.models.tables import datasets, runs
-from src.schemas.requests import Delivery, Import, Login, Review, Run
+from src.schemas.requests import Delivery, Import, LedgerBatch, Login, Merge, Review, Run
 from src.services.data import PROFILE, csv_records, save_revision
 from src.services.domain import sample_rows
+from src.services.ledger import (COMPLETION, PATROL, all_ledgers, ledger_summary, list_merge_tables,
+                                 merge_task, post_batch, request_merge, run_merge, sample_ledger_rows)
 from src.services.workflow import add_run, cancel_schedule, review_run, schedule_report
 from src.utils.exports import write_csv
 from src.utils.security import allowed, authenticate, signed_in
@@ -43,6 +45,14 @@ def example(account=Depends(signed_in)):
     return download_csv(write_csv(sample_rows(), [c['key'] for c in PROFILE['columns']], False), PROFILE['filename'])
 
 
+@router.get('/example-ledger-{kind}.csv')
+def ledger_example(kind: str, account=Depends(signed_in)):
+    if kind not in (PATROL, COMPLETION):
+        raise HTTPException(404, '台账类型不存在。')
+    rows, columns = sample_ledger_rows(kind)
+    return download_csv(write_csv(rows, columns, False), f'{kind}-ledger.csv')
+
+
 @router.get('/datasets')
 def list_datasets(account=Depends(signed_in)):
     return revisions()
@@ -60,6 +70,41 @@ def import_data(body: Import, account=Depends(analyst)):
     rows = csv_records(body.csv)
     key, created = save_revision(body.name, rows, account['username'])
     return {'id': key, 'created': created, 'rows': len(rows)}
+
+
+@router.get('/ledgers')
+def ledgers(account=Depends(signed_in)):
+    return all_ledgers()
+
+
+@router.get('/ledgers/{kind}')
+def ledger(kind: str, account=Depends(signed_in)):
+    return ledger_summary(kind)
+
+
+@router.post('/ledgers/{kind}/batches', status_code=201)
+def ledger_batch(kind: str, body: LedgerBatch, account=Depends(analyst)):
+    return post_batch(kind, body.name, body.csv, body.records, account['username'])
+
+
+@router.get('/merges')
+def merges(account=Depends(signed_in)):
+    return list_merge_tables()
+
+
+@router.post('/merges', status_code=202)
+def merge(body: Merge, account=Depends(analyst)):
+    return request_merge(body.name, body.as_of, account['username'])
+
+
+@router.get('/merges/{key}')
+def merge_detail(key: int, account=Depends(signed_in)):
+    return merge_task(key)
+
+
+@router.post('/merges/{key}/resume')
+def resume(key: int, account=Depends(analyst)):
+    return run_merge(key)
 
 
 @router.get('/runs')

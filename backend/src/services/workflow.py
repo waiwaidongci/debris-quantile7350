@@ -7,6 +7,7 @@ from src.constants.enums import State
 from src.models.database import add_event, engine, fetch_one
 from src.models.tables import datasets, deliveries, runs, schedules
 from src.services.data import parse_options
+from src.services.ledger import merged_dataset
 
 
 def add_run(body, actor):
@@ -15,6 +16,8 @@ def add_run(body, actor):
     with engine.begin() as connection:
         if fetch_one(connection, datasets, body.dataset_id) is None:
             raise HTTPException(404, '数据版本不存在。')
+        if merged_dataset(connection, body.dataset_id) is None:
+            raise HTTPException(409, '分析只接受合表生成的成表版本，请先按指定时点合表。')
         key = connection.execute(insert(runs).values(dataset_id=body.dataset_id, options=options,
                     state=State.queued.value, owner=actor, created=now)).inserted_primary_key[0]
         add_event(connection, actor, 'queue', key, now)

@@ -7,6 +7,7 @@ from tempfile import NamedTemporaryFile
 from src.config.settings import ARTIFACTS
 from src.models.database import cache
 from src.services.domain import compute
+from src.services.ledger import claim_merge, process_merge
 from src.services.workflow import claim_run, finish_run, publish_due
 from src.utils.exports import write_csv
 
@@ -34,9 +35,13 @@ def calculate(job):
 def work():
     while True:
         try:
-            job = claim_run()
-            if job:
-                calculate(job)
+            merge = claim_merge()
+            if merge:
+                process_merge(merge)
+            else:
+                job = claim_run()
+                if job:
+                    calculate(job)
             publish_due()
             cache.set('worker:heartbeat', str(time.time()), ex=25)
         except Exception:

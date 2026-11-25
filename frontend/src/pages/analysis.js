@@ -11,8 +11,9 @@ import {esc,formData,time} from '../utils/html.js';
 export async function analysis() {
   const profile = state.profile;
   const [datasets,runs] = await Promise.all([api('/datasets'),api('/runs')]);
-  const form = state.account.role === 'analyst' && datasets.length ? `<form id="queue" class="inline-form"><label>数据版本<select name="dataset_id">${datasets.map(row => `<option value="${row.id}" ${row.id === state.datasetId ? 'selected' : ''}>${esc(row.name)} · #${row.id}</option>`).join('')}</select></label>${profile.options.map(field => `<label>${esc(field.label)}${fieldInput(field,esc)}</label>`).join('')}<button type="submit">提交计算</button>${errorSlot}</form>` : empty(datasets.length ? '分析员可提交计算。' : '先导入数据版本。', '#1', '查看数据台账');
-  return `<section><h2>计算条件</h2><p>${esc(profile.method)}</p>${form}</section><section><h2>分析记录</h2>${table(runs.map(run => ({任务:{link:`#3/${run.id}`,text:`#${run.id}`},数据版本:run.dataset_id,状态:states[run.state],提交时间:time(run.created),复核:decisions[run.decision] ?? '待复核'})))}</section>`;
+  const merged = datasets.filter(row => row.merged);
+  const form = state.account.role === 'analyst' && merged.length ? `<form id="queue" class="inline-form"><label>成表版本<select name="dataset_id">${merged.map(row => `<option value="${row.id}" ${row.id === state.datasetId ? 'selected' : ''}>数据 #${row.id} · 合表 ${esc(row.as_of_text)} · ${row.count ?? '—'} 行</option>`).join('')}</select></label>${profile.options.map(field => `<label>${esc(field.label)}${fieldInput(field,esc)}</label>`).join('')}<button type="submit">提交计算</button>${errorSlot}</form>` : empty(merged.length ? '分析员可提交计算。' : '先按指定时点合表生成成表。', '#1', '前往台账与合表');
+  return `<section><h2>计算条件</h2><p>${esc(profile.method)}</p><p class="hint">分析只接受合表生成的成表版本；补正后可另生成新版成表，旧成表照常可用。</p>${form}</section><section><h2>分析记录</h2>${table(runs.map(run => ({任务:{link:`#3/${run.id}`,text:`#${run.id}`},成表版本:run.dataset_id,状态:states[run.state],提交时间:time(run.created),复核:decisions[run.decision] ?? '待复核'})))}</section>`;
 }
 
 export async function currentRun() {

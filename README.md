@@ -1,8 +1,26 @@
 # 河道清漂作业用时预报
 
-青浦水务养护中心清漂调度组（模拟）。调度组管理柳湾上段和青浦桥段的 3 个清漂班组。岸巡员前一日下午把河段与预估漂浮物量写入冻结巡查表，工单员在作业结束后录入实耗。分析员合并两份台账并计算预报，值班长据此复核次日船艇和班组排程。
+青浦水务养护中心清漂调度组（模拟）。调度组管理柳湾上段和青浦桥段的 3 个清漂班组。岸巡员前一日下午把河段与预估漂浮物量写入冻结巡查台账，工单员在作业结束后把实耗写入完工台账。两条台账分开补登，分析员按指定时点合并成表，再以成表计算预报，值班长据此复核次日船艇和班组排程。
 
-qingpu-debris-20261124.csv 每行一张工单，提供计划开工时间、冻结巡查快照时间、河段、预估漂浮物量，以及完工状态、实耗和入账时间。全部时间为北京时间。待完工行实耗填 0，入账时间填“待完工”。 输出逐日及逐工单回测、条件与基线的 Pinball 损失与覆盖率、待完工工单分位预报、候选班次覆盖率和班组建议，供值班长复核，定时把报告交给清漂调度台。
+## 双台账与成表口径
+
+- **岸巡台账**（`patrol`）每行一条巡查记录：
+  `order_id, version, action, posted_at, effective_at, reach, planned_start, snapshot_at, debris_m3`。
+- **完工台账**（`completion`）每行一条完工记录：
+  `order_id, version, action, posted_at, effective_at, duration_min`。
+- `action` 为 `post`（入账）或 `revoke`（撤销）；撤销行只登记动作与时间，不带明细。
+  也接受中文表头与 `入账` / `撤销` 动作，缺省 `effective_at` 时按 `posted_at` 生效。
+- **重试不重复入账**：批次按规范化内容的 SHA-256 去重，同一批次重发只返回原批次。
+  批次之间按 `(order_id, version)` 去重，只补新版本。
+- **同单同版内容冲突**：同一工单同一版本出现不同内容时整批退回（HTTP 409），该批任何记录都不入账。
+- **按指定时点合表**：只取 `posted_at` 与 `effective_at` 均不晚于该时点、且版本最高的记录。
+  巡查撤销排除该工单；完工撤销或缺失记待完工。
+- **受理时快照**：合表任务受理时冻结两边台账快照，中断后续跑只使用该快照，不会吸收之后到达的补正。
+  相同快照与时点重复提交复用同一任务。
+- **一份成表**：同一任务最多生成一份成表（数据版本），重跑或续跑复用该版本。
+- **补正另生成新版**：之后到达的补正可按新的合表时点另建任务生成新版成表；旧成表照常可查、可用于分析。
+- **成表才可用于分析**：提交计算只接受合表生成的成表版本，原始 CSV 版本不能直接分析。
+
 
 - 岸巡和完工台账分开维护，迟到录入容易混进历史预报。
 - 按全河段平均用时排班时，轻量工单闲置船艇，高量工单挤占交接窗口。
@@ -51,17 +69,19 @@ docker compose up -d --build --wait
 docker compose exec -T backend python -m scripts.seed_demo
 ```
 
+演示 seed 会分别入账岸巡与完工两条台账，并按 2026-11-23 18:00 生成一份演示成表。
+
 - Web 界面 `http://127.0.0.1:18303`
 - API 文档 `http://127.0.0.1:19303/docs`
 - 数据库端口 `17803`
 
 | 账号 | 演示密码 | 工作权限 |
 |---|---|---|
-| analyst | analyst-demo-24 | 导入 CSV、运行分析、导出工作稿 |
+| analyst | analyst-demo-24 | 补登台账、合表、运行分析、导出工作稿 |
 | reviewer | reviewer-demo-24 | 复核、设置和停止投递、导出 |
 | viewer | viewer-demo-24 | 浏览结果、导出已批准的报告、查收投递 |
 
-原生 HTML/CSS/JavaScript 前端与 Nginx、FastAPI、Python worker、MySQL 8.0 和 Redis 组成五服务 Compose。`backend/src/services/domain.py` 存放业务算法，`domain.json` 定义字段与验收口径，`frontend/src/pages` 为业务页面。更新任一侧源文件后，用 `docker compose up -d --build` 重建对应镜像。`backend/src/constants/enums.py` 和 `frontend/src/constants/enums.js` 定义角色及运行状态。`.env` 支持前端、API、数据库端口、演示 seed 开关和 JWT 密钥。首次部署到非演示环境时更换演示身份及 JWT/数据库凭据。
+原生 HTML/CSS/JavaScript 前端与 Nginx、FastAPI、Python worker、MySQL 8.0 和 Redis 组成五服务 Compose。`backend/src/services/ledger.py` 存放双台账入账与合表逻辑，`backend/src/services/domain.py` 存放业务算法，`domain.json` 定义字段与验收口径，`frontend/src/pages` 为业务页面。更新任一侧源文件后，用 `docker compose up -d --build` 重建对应镜像。`backend/src/constants/enums.py` 和 `frontend/src/constants/enums.js` 定义角色及运行状态。`.env` 支持前端、API、数据库端口、演示 seed 开关和 JWT 密钥。首次部署到非演示环境时更换演示身份及 JWT/数据库凭据。
 
 `docker compose down` 停止服务并保留数据卷。现场数据和演示结果可以在各自版本中并存。
 
